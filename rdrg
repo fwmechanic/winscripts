@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+# purpose: grep .rdu or .rdua file (see %~dp0rdgen ) for reg value (name or
+#    data) or key(name), showing in output all prior values and associated
+#    key.
+
+die() { printf %s "${@+$@$'\n'}" 1>&2 ; exit 1 ; }
+
+join () {  # https://stackoverflow.com/a/53839647
+   local IFS="$1" ; shift
+   shift
+   echo "$*"  # this doesn't seem to work with pattern'ish $1 values (such as we're using here)
+   }
+
+join () {  # https://stackoverflow.com/a/53839433  #3 gets the job done (I have another impl somewhere, but not sure it won't face the same "pattern'ish value" issues
+   local dd="$1" ; shift
+   local delim=""
+   local joined=""
+   for item in "${@}"; do
+      joined="$joined$delim$item"
+      delim="$dd"
+   done
+   echo "$joined"
+   }
+
+# sample use of rg to capture (only) the regdump key of a matching value
+# value sought: "TransparentKeyPassthrough"="Remote"
+
+# $ rg -UNB1 --context-separator "" --multiline-dotall '^\[HKEY_[^\[]+Transparent[^\n]+Remote' rd.u16
+#
+# [HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Citrix\ICA Client\Engine\Lockdown Profiles\All Regions\Lockdown\Virtual Channel
+# s\Keyboard]
+# "AlwaysSendPrintScreen"=""
+# "EchoShiftKeys"="*"
+# "KeyboardTimer"="*"
+# "KeyboardLayout"=""
+# "KeyboardType"=""
+# "KeyboardSendLocale"="*"
+# "KeyboardForceLEDUpdate"="*"
+# "KeyboardMappingFile"=""
+# "LocalIME"=""
+# "ScancodeEnabled"="*"
+# "TransparentKeyPassthrough"="Remote"
+#
+#
+# [HKEY_USERS\S-1-5-21-2096284833-3401019737-2128148655-1001\Software\Citrix\ICAClient\Engine\Lockdown Profiles\All Region
+# s\Lockdown\Virtual Channels\Keyboard]
+# "TransparentKeyPassthrough"="Remote"
+#
+# kg@DESKTOP-2JBV3IO MINGW64 ~/my/repos/winscripts (master)
+
+# gaps in above:
+# - there are 2 matches, but uniform separation is lacking.
+#   * w/o -B1, there is no gap in rg output separating the two
+#   * w/  -B1, the blank line which precedes every HK... line is displayed,
+#              which serves as an rg separator.  Unfortunately, the rg
+#              separator "--" is also injected (on its own line).  Adding
+#              --context-separator "" turns the rg context-separator into a
+#              blank line (therefore matches are separated by 2 blank lines,
+#              with the first match being preceded by 1 blank line).
+#
+#              This seems to be the best we can do: replacing -B1 with -C0
+#              (in hopes of having a context-separator line shown w/o any
+#              source-file context lines) causes no context-separator lines
+#              at all to be generates.
+#
+# - shows "value-name"="value-data" lines which just happen to lie beween HK... line and the matching line
+
+# rg --help
+
+fnm="$1" ; shift
+ifs='[^\n]+'                 # ; echo "ifs=$ifs"
+pat="$(join "$ifs" "${@}")"  # ; echo "pat=$pat"
+# set -x
+rg --multiline --multiline-dotall --no-line-number --before-context 1 --context-separator "" '^\[HKEY_[^\[]+'"$pat" "$fnm"

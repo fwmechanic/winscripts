@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+# purpose: export Windows registry into text file (.rdu: UTF-16LE, .rdua: ANSI)
+
+# MUST BE ADMINISTRATOR to run `regedit //E $destfnm` !
+# MUST BE ADMINISTRATOR to run `regedit //E $destfnm` !
+# MUST BE ADMINISTRATOR to run `regedit //E $destfnm` !
+
+die() { printf %s "${@+$@$'\n'}" 1>&2 ; exit 1 ; }
+
+ofnm="${COMPUTERNAME}_$(date '+%Yd%jt%H%M%S%z')"
+
+# untested: optional "regpath" param can be supplied as $2 to export a registry subtree
+
+if true; then
+  rdnm="$ofnm.rdu"
+  rdanm="$ofnm.rdua"  # ext specific to this gen method since not comparable; see below
+  # Per https://ss64.com/nt/regedit.html `regedit //E "$rdanm"` exports to UTF16LE format
+  # Serendipitously (https://stackoverflow.com/a/54236428) ripgrep handles UTF16LE files transparently
+  # and thus can be used to generate ANSI .rdua file from UTF16LE .rdu file as seen below.
+  # output has initial line (in UTF16LE of course)
+  # "Windows Registry Editor Version 5.00"
+  regedit //E "$rdnm" "$@" && rg -N . "$rdnm" > "$rdanm" && file "$ofnm."* && printf "to grep $rdnm, use\nrdrg %s pattern(s)" "$rdnm"
+else
+  rdanm="$ofnm.rda"
+  # Per https://ss64.com/nt/regedit.html _UNDOCUMENTED_ `regedit //A "$rdanm"` exports to ANSI format
+  # output has initial line (in ANSI~=ASCII)
+  # "REGEDIT4"
+  regedit //A "$rdanm" "$@"                              && file "$ofnm."* && echo "wrote $rdanm"
+fi
+  # Output from the two generation methods IS NOT COMPARABLE:
+  # `regedit //E` dumps UTF16LE strings as hex-/byte-array values with 2 bytes for every UTF16LE character
+  # `regedit //A` dumps UTF16LE strings as hex-/byte-array values with 1 byte  for every UTF16LE character
+  # (for this reason at least, `regedit //A` output is noticeably smaller)
