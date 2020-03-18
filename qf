@@ -1,0 +1,216 @@
+#!/usr/bin/env lua
+
+-- above expects to find  ~/my/repos/k_edit/lua  which should be in PATH
+
+-- 20120102 kgoodwin wrote this (finally!)
+
+require "strict"
+
+local hardcodedArg = { 'm:/ebooks' }  -- undefine or empty to allow passing cmdline args (in arg variable)
+
+local function splitfpath(fullnm)  -- io.write("fnm=",fullnm,"\n")
+   local dn,fn = fullnm:match"(.+[\\/])([^\\/]+)$"
+   if not fn then return nil,fullnm end
+   return dn,fn
+   end
+
+fmt = string.format
+local mtfile = assert( getmetatable( io.stdout ) )
+function mtfile:fmt(...)    return self:write( fmt(...)  ) end
+
+function table.invert( tbl )       local rv = {} for ky,val in pairs(tbl) do rv[ val    ] = ky  end return rv end
+
+function a_grep(  fx,ary )   local rv = {} for ky,val in ipairs(ary) do if fx( val ) then rv[ #rv + 1 ] = val end end return rv end
+function a_filenames( dirnm, recurse )  -- filter out directories and files in .xxx directories
+   return a_grep( function(nm) return not (nm:match("[\\/]$") or nm:match("[\\/]%.%w+[\\/]")) end, _dir.read_names( dirnm and #dirnm > 0 and dirnm or "./", recurse and 1 or 0 ) )
+   end
+
+function pairsByKeys( tbl1, sortfxn )  -- a pairsByKeys using pairsByKeyFxn would be overkill since there's no chance of duplicate keys
+   local iv = {}
+   for key1,val1 in pairs(tbl1) do iv[ #iv + 1 ] = key1 end
+   table.sort( iv, sortfxn )
+   local idx = 0
+   return function()
+      idx = idx + 1
+      local key1 = iv[ idx ]
+      -- if key1 then print( "+++  ", key1 ) end
+      return key1, tbl1[ key1 ]
+      end
+   end
+
+function ms_esc(fnm)
+   if fnm:match"[%s'&!|()]" then
+      fnm = '"'..fnm..'"'
+      end
+   return (fnm:gsub("/","\\"))
+   end
+
+local t_mons = table.invert{"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"}
+local last_year = (os.date"*t").year-1
+
+local fs_ext     local function sv_ext  (st) fs_ext   = st  return "" end
+local fs_cropd   local function sv_cropd(st) fs_cropd = st  return "" end
+
+local filters = {
+
+   --------------- preprocessing
+   function(fn)  fs_ext=""  fs_cropd=""  return fn         end,
+   function(fn)  return fn:gsub( "%.[^.]+$"  , sv_ext   )  end,
+   function(fn)  return fn:gsub( "_cropped$" , sv_cropd )  end,
+
+   --------------- actual filters
+   function(fn) -- replace (publication) Mnm-Yyyy with Yyyy-mm
+      local mon,yr = fn:match"%.(%a%a%a)%.(%d%d%d%d)$"
+      if yr and t_mons[mon] then
+         return fn:gsub("%.(%a%a%a)%.(%d%d%d%d)$","."..fmt("%s-%02d",yr,t_mons[mon]))
+         end
+      return fn
+      end,
+
+   function(fn) -- replace (publication) Yyyy-mm with Yyyy in older fnms
+      local yr,mon = fn:match"%.(%d%d%d%d)%-(%d%d)$"
+      if yr then
+         local yn = tonumber(yr)
+         mon   = tonumber(mon)
+         -- io.write( yr, " ? ", last_year,"\n" )
+         if mon <= 12 and yn > 1912 and yn < last_year then
+            return fn:gsub("%.(%d%d%d%d)%-%d%d$",".%1")
+            end
+         end
+      return fn
+      end,
+
+   function(fn) return fn:gsub( "%((%d%d%d%d)%)$",".%1" ) end,  -- alt yr-of-publ fn format
+
+   function(fn) return fn:gsub( "–"   , "-" ) end,
+   function(fn) return fn:gsub( "[%s.,_!]+", "." ) end,                                     -- go
+   function(fn) return fn:gsub( "%.%-", "-" ) end,
+   function(fn) return fn:gsub( "%-%.", "-" ) end,
+
+   function(fn) return fn:gsub( "['’“”]"   , "" ) end,
+   function(fn) return fn:gsub( "[%._-]+$" , "" ) end,
+
+   function(fn) return fn:gsub( "–","-" ) end,
+   function(fn) return fn:gsub( "([CcFf])#%.", "%1sharp." ) end,
+   function(fn) return fn:gsub( "^Black%.Decker"  , "BD." ) end,
+   function(fn) return fn:gsub( "%.039%.s%."  , "s." ) end,
+
+   function(fn) return fn:gsub( "U%.S%.", "US." ) end,                                      -- go
+   function(fn) return fn:gsub( "%.#(%d+)", ".v%1" ) end,
+   function(fn) return fn:gsub( "%.#%.", ".@." ) end,
+   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.[I1]%.", "WW1." ) end,
+   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.2%." , "WW2." ) end,
+   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.II%.", "WW2." ) end,
+   function(fn) return fn:gsub( "%.[Ww][Ww]II", ".WW2" ) end,
+
+   function(fn) return fn:gsub( "%.[Ss]econd%.[Ee]dition([-%.])"  , ".2e%1" ) end,
+   function(fn) return fn:gsub( "%.(%d+)[nr]d%.[Ee]dition([-%.])"  , ".%1e%2" ) end,
+   function(fn) return fn:gsub( "%.(%d+)th%.[Ee]dition([-%.])"  , ".%1e%2" ) end,
+   function(fn) return fn:gsub( "%.&%.", ".n." ) end,                                       -- go
+
+   --------------- un-preprocessing
+   function(fn) return fn..fs_cropd end,  -- #########  MUST BE LAST-1 !!!
+   function(fn) return fn..fs_ext   end,  -- #########  MUST BE LAST   !!!
+   }
+
+local destroy = true
+local rename_file,remove_file
+do
+   local function sms_esc(fn)
+      local mfn = ms_esc(fn)
+      if not mfn:match( '^"' ) then mfn = " " .. mfn end
+      return mfn
+      end
+   local function rm_msg(fn)     io.write( "removing ",sms_esc(fn), "\n" ) end
+   local function mv_msg(fn,nfn) io.write( "move.now ",sms_esc(fn), "\nmove.new ",sms_esc(nfn),"\n" ) end
+   if destroy then
+      rename_file = function( fn,nfn ) mv_msg(fn,nfn) assert( os.rename( fn,nfn ) ) end
+      remove_file = function( fn )     rm_msg(fn)     assert( os.remove(fn)       ) end
+   else
+      rename_file = mv_msg
+      remove_file = rm_msg
+      end
+end
+
+local filter = {}
+do
+   filter.afile = function( fnm )
+      local dn,fn = splitfpath( fnm )     -- ; io.write( "d=",dn,",f=",fn,"\n" )
+      local nfn = fn
+      for _,filter in ipairs(filters) do  -- ; io.write( "nfn=",nfn,"\n" )
+         nfn = filter( nfn )
+         end
+      if nfn ~= fn then                   -- ; io.write( "now=",fn,"\nnew=",nfn,"\n" )
+         fn  = dn .. fn
+         nfn = dn .. nfn                  -- ; io.write( "pnow=",fn,"\npnew=",nfn,"\n" )
+         local fs  = io.stat( fn )
+         local nfs = io.stat( nfn )
+         if nfs then
+            if fn:lower()==nfn:lower() then
+               io.write( "recase ",ms_esc(fn)," ",ms_esc(nfn),"\n" )
+               rename_file( fn, nfn )
+            else
+               io.stdout:fmt( "%8d %s\n",nfs.size, ms_esc(nfn) )
+               io.stdout:fmt( "%8d %s\n",fs.size, ms_esc(fn) )
+               if fs.size == nfs.size then
+                  remove_file(fn)
+               else
+                  io.write( "move blocked" )
+                  end
+               end
+            io.stdout:fmt( "\n" )
+         else
+            rename_file( fn, nfn )
+            fnm = nfn
+            end
+         end
+
+      if false then
+         -- cropsync! force "_croppped." version of file to have same timestamps as its parent
+         local basefnm = fnm:gsub( "_cropped%.", "." )
+         if fnm ~= basefnm then                         -- ; io.stdout:write( "cropsync_a=", fnm, "\n", "cropsync_b=", basefnm, "\n" )
+            local bstat = io.stat( basefnm )
+            if bstat then
+               local fstat = assert( io.stat( fnm ) )
+               if bstat.atime ~= fstat.atime or
+                  bstat.ctime ~= fstat.ctime or
+                  bstat.mtime ~= fstat.mtime then       -- ; io.stdout:write( "cropsync_c=", fnm, "\n" )
+                  if not _win.SetFileTimes( fnm, bstat.ctime, bstat.atime, bstat.mtime ) then
+                     io.stderr:write( "_win.SetFileTimes("..fnm..") failed" )
+                     end
+                  end
+               end
+            end
+         end
+
+      return fnm
+      end
+end
+
+local myArg = hardcodedArg and #hardcodedArg > 0 and hardcodedArg or arg
+assert( #myArg > 0, "missing rootpaths arg(s)" )
+local path = table.concat( myArg, ';' )
+io.write( "rootpaths=", path, "\n")
+local sl = assert(path:match "[\\/]")
+local dirs = {}
+for dirnm in path:gmatch"[^;]+" do
+   local dnm = (dirnm..sl):gsub("[\\/]([\\/])$", "$1" )
+   dirs[1+#dirs] = dnm
+   end
+
+local numFiles = 0
+local t_fnms = {}
+for _,dnm in ipairs(dirs) do
+   io.write("scanning ", dnm)
+   local fnm_ = a_filenames( dnm, 1 )  -- filters out directories and files in .xxx directories
+   t_fnms[dnm] = fnm_
+   numFiles = numFiles + #fnm_
+   if 0==#fnm_ then io.write("*** ERROR ***") end
+                    io.write("discovered ", #fnm_," filenames")
+   io.write("\n")
+   end
+
+for dnm,fnms in pairsByKeys(t_fnms) do
+   for _,nm in ipairs(fnms) do filter.afile( nm, dnm ) end
+   end
+io.write("examined ", numFiles," filenames")
