@@ -1,0 +1,4 @@
+#!bash to be sourced, not called
+
+java_tools_root="$HOME/my/bin/java"
+jdkhome="$java_tools_root/zulu-11"
