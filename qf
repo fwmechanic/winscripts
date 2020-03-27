@@ -18,14 +18,14 @@ fmt = string.format
 local mtfile = assert( getmetatable( io.stdout ) )
 function mtfile:fmt(...)    return self:write( fmt(...)  ) end
 
-function table.invert( tbl )       local rv = {} for ky,val in pairs(tbl) do rv[ val    ] = ky  end return rv end
+function table.invert( tbl ) local rv = {} for ky,val in pairs(tbl) do rv[ val ] = ky  end return rv end
 
-function a_grep(  fx,ary )   local rv = {} for ky,val in ipairs(ary) do if fx( val ) then rv[ #rv + 1 ] = val end end return rv end
-function a_filenames( dirnm, recurse )  -- filter out directories and files in .xxx directories
+local function a_grep(  fx,ary )   local rv = {} for ky,val in ipairs(ary) do if fx( val ) then rv[ #rv + 1 ] = val end end return rv end
+local function a_filenames( dirnm, recurse )  -- filter out directories and files in .xxx directories
    return a_grep( function(nm) return not (nm:match("[\\/]$") or nm:match("[\\/]%.%w+[\\/]")) end, _dir.read_names( dirnm and #dirnm > 0 and dirnm or "./", recurse and 1 or 0 ) )
    end
 
-function pairsByKeys( tbl1, sortfxn )  -- a pairsByKeys using pairsByKeyFxn would be overkill since there's no chance of duplicate keys
+local function pairsByKeys( tbl1, sortfxn )  -- a pairsByKeys using pairsByKeyFxn would be overkill since there's no chance of duplicate keys
    local iv = {}
    for key1,val1 in pairs(tbl1) do iv[ #iv + 1 ] = key1 end
    table.sort( iv, sortfxn )
@@ -38,7 +38,7 @@ function pairsByKeys( tbl1, sortfxn )  -- a pairsByKeys using pairsByKeyFxn woul
       end
    end
 
-function ms_esc(fnm)
+local function ms_esc(fnm)
    if fnm:match"[%s'&!|()]" then
       fnm = '"'..fnm..'"'
       end
@@ -90,7 +90,6 @@ local filters = {
    function(fn) return fn:gsub( "['’“”]"   , "" ) end,
    function(fn) return fn:gsub( "[%._-]+$" , "" ) end,
 
-   function(fn) return fn:gsub( "–","-" ) end,
    function(fn) return fn:gsub( "([CcFf])#%.", "%1sharp." ) end,
    function(fn) return fn:gsub( "^Black%.Decker"  , "BD." ) end,
    function(fn) return fn:gsub( "%.039%.s%."  , "s." ) end,
@@ -132,60 +131,39 @@ do
       end
 end
 
-local filter = {}
-do
-   filter.afile = function( fnm )
-      local dn,fn = splitfpath( fnm )     -- ; io.write( "d=",dn,",f=",fn,"\n" )
-      local nfn = fn
-      for _,filter in ipairs(filters) do  -- ; io.write( "nfn=",nfn,"\n" )
-         nfn = filter( nfn )
-         end
-      if nfn ~= fn then                   -- ; io.write( "now=",fn,"\nnew=",nfn,"\n" )
-         fn  = dn .. fn
-         nfn = dn .. nfn                  -- ; io.write( "pnow=",fn,"\npnew=",nfn,"\n" )
-         local fs  = io.stat( fn )
-         local nfs = io.stat( nfn )
-         if nfs then
-            if fn:lower()==nfn:lower() then
-               io.write( "recase ",ms_esc(fn)," ",ms_esc(nfn),"\n" )
-               rename_file( fn, nfn )
-            else
-               io.stdout:fmt( "%8d %s\n",nfs.size, ms_esc(nfn) )
-               io.stdout:fmt( "%8d %s\n",fs.size, ms_esc(fn) )
-               if fs.size == nfs.size then
-                  remove_file(fn)
-               else
-                  io.write( "move blocked" )
-                  end
-               end
-            io.stdout:fmt( "\n" )
-         else
-            rename_file( fn, nfn )
-            fnm = nfn
-            end
-         end
-
-      if false then
-         -- cropsync! force "_croppped." version of file to have same timestamps as its parent
-         local basefnm = fnm:gsub( "_cropped%.", "." )
-         if fnm ~= basefnm then                         -- ; io.stdout:write( "cropsync_a=", fnm, "\n", "cropsync_b=", basefnm, "\n" )
-            local bstat = io.stat( basefnm )
-            if bstat then
-               local fstat = assert( io.stat( fnm ) )
-               if bstat.atime ~= fstat.atime or
-                  bstat.ctime ~= fstat.ctime or
-                  bstat.mtime ~= fstat.mtime then       -- ; io.stdout:write( "cropsync_c=", fnm, "\n" )
-                  if not _win.SetFileTimes( fnm, bstat.ctime, bstat.atime, bstat.mtime ) then
-                     io.stderr:write( "_win.SetFileTimes("..fnm..") failed" )
-                     end
-                  end
-               end
-            end
-         end
-
-      return fnm
+local function processFilenames( fnm )
+   local dn,fn = splitfpath( fnm )     -- ; io.write( "d=",dn,",f=",fn,"\n" )
+   local nfn = fn
+   for _,filter in ipairs(filters) do  -- ; io.write( "nfn=",nfn,"\n" )
+      nfn = filter( nfn )
       end
-end
+   if nfn ~= fn then                   -- ; io.write( "now=",fn,"\nnew=",nfn,"\n" )
+      fn  = dn .. fn
+      nfn = dn .. nfn                  -- ; io.write( "pnow=",fn,"\npnew=",nfn,"\n" )
+      local fs  = io.stat( fn )
+      local nfs = io.stat( nfn )
+      if nfs then
+         if fn:lower()==nfn:lower() then
+            io.write( "recase ",ms_esc(fn)," ",ms_esc(nfn),"\n" )
+            rename_file( fn, nfn )
+         else
+            io.stdout:fmt( "%8d %s\n",nfs.size, ms_esc(nfn) )
+            io.stdout:fmt( "%8d %s\n",fs.size, ms_esc(fn) )
+            if fs.size == nfs.size then
+               remove_file(fn)
+            else
+               io.write( "move blocked" )
+               end
+            end
+         io.stdout:fmt( "\n" )
+      else
+         rename_file( fn, nfn )
+         fnm = nfn
+         end
+      end
+
+   return fnm
+   end
 
 local myArg = hardcodedArg and #hardcodedArg > 0 and hardcodedArg or arg
 assert( #myArg > 0, "missing rootpaths arg(s)" )
@@ -211,6 +189,8 @@ for _,dnm in ipairs(dirs) do
    end
 
 for dnm,fnms in pairsByKeys(t_fnms) do
-   for _,nm in ipairs(fnms) do filter.afile( nm, dnm ) end
+   for _,nm in ipairs(fnms) do
+      processFilenames( nm, dnm )
+      end
    end
 io.write("examined ", numFiles," filenames")
