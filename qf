@@ -4,7 +4,7 @@
 
 -- 20120102 kgoodwin wrote this (finally!)
 
-require "strict"
+require "strict"  -- can be found in same dir as this file: %~dp0strict.lua
 
 local hardcodedArg = { 'm:/ebooks' }  -- undefine or empty to allow passing cmdline args (in arg variable)
 
