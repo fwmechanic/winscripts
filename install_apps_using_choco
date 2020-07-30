@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+die() { printf %s "${@+$@$'\n'}" 1>&2 ; exit 1 ; }
+
+command -v choco > /dev/null || die "need to install choco; use install_chocolatey.bat"
+
+cinst() (
+   set -x
+   choco install -y "$@"
+   )
+
+cinst mpc-hc-clsid2 irfanview irfanviewplugins
