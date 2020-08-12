@@ -9,4 +9,6 @@ cinst() (
    choco install -y "$@"
    )
 
-cinst mpc-hc-clsid2 irfanview irfanviewplugins
+
+
+cinst mpc-hc-clsid2 irfanview irfanviewplugins shellcheck calibre
