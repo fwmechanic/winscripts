@@ -11,4 +11,4 @@ cinst() (
 
 
 
-cinst mpc-hc-clsid2 irfanview irfanviewplugins shellcheck calibre
+cinst mpc-hc-clsid2 irfanview irfanviewplugins shellcheck calibre wget ffmpeg universal-ctags ripgrep xmlstarlet zulu11
