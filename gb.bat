@@ -18,7 +18,7 @@ if "%filename%" == "" (
 )
 call :RmvOnePathEl "%filename%"
 call :RmvOnePathEl "%filename%"
-set "filename=%filename%\bin\sh.exe"
+set "filename=%filename%\bin\bash.exe"
    REM echo %filename%
 if exist "%filename%" (
   start "" "%filename%" --login
