@@ -1,0 +1,31 @@
+#!/usr/bin/perl
+
+# use case: accept a UTF-16LE .reg file for "all environment variables" and remove all variables/values except for "Path"
+
+# oh the humanity!!!  http://blogs.perl.org/users/yary/2016/01/utf-16-and-windows-crlf-oh-my.html
+# oh the insanity!!!  http://blogs.perl.org/users/yary/2016/01/utf-16-and-windows-crlf-oh-my.html
+# this solution violates
+#   use strict;
+#   use warnings;
+# so both must be removed.
+
+# NB!!!!! input .reg file MUST be passed via STDIN!!!  If you pass a filename, this program will not error out, but will write UNENCODED (invalid) output
+# NB!!!!! input .reg file MUST be passed via STDIN!!!  If you pass a filename, this program will not error out, but will write UNENCODED (invalid) output
+# NB!!!!! input .reg file MUST be passed via STDIN!!!  If you pass a filename, this program will not error out, but will write UNENCODED (invalid) output
+
+my $varnm = shift @ARGV // "Path";
+print STDERR "varnm $varnm\n";
+
+binmode($_,':raw:encoding(UTF-16LE):crlf') for(STDIN,STDOUT);
+
+my $q2 = '"';
+while ( <> ) {
+   if( $. <= 3 ) {  # first 3 lines of .reg file are necessary boilerplate
+      print;
+      next;
+      }
+   if( /^\Q${q2}${varnm}${q2}/io .. not /[0-9a-f]{2},\\$/ ) {
+      print;
+      next;
+      }
+   }
