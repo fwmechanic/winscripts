@@ -2,6 +2,24 @@
 
 die() { printf %s "${@+$@$'\n'}" 1>&2 ; exit 1 ; }
 
+# other choco commands
+#  `choco uninstall -x pkgnm` remove package and all dependencies
+#  `choco upgrade -y all` upgrade all installed package
+
+pkgs=(
+# "ffmpeg"  # removed since choco version is incompatible with my bash scripts for unknown reasons
+  "calibre"
+  "irfanview" "irfanviewplugins"
+  "make"  # GNU make
+  "mpc-hc-clsid2"
+  "ripgrep"
+  "shellcheck"
+  "universal-ctags"
+  "wget"
+  "xmlstarlet"
+  "zulu11"
+  )
+
 command -v choco > /dev/null || die "need to install choco; use install_chocolatey.bat"
 
 cinst() (
@@ -9,6 +27,4 @@ cinst() (
    choco install -y "$@"
    )
 
-
-
-cinst mpc-hc-clsid2 irfanview irfanviewplugins shellcheck calibre wget ffmpeg universal-ctags ripgrep xmlstarlet zulu11
+cinst "${pkgs[@]}"
