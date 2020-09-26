@@ -9,11 +9,13 @@ die() { printf %s "${@+$@$'\n'}" 1>&2 ; exit 1 ; }
 pkgs=(
 # "ffmpeg"  # removed since choco version is incompatible with my bash scripts for unknown reasons
   "calibre"
+  'git.install --params "/GitAndUnixToolsOnPath /WindowsTerminal /NoCredentialManager /NoAutoCrlf"'
   "irfanview" "irfanviewplugins"
   "make"  # GNU make
   "mpc-hc-clsid2"
   "ripgrep"
   "shellcheck"
+  "totalcommander"
   "universal-ctags"
   "wget"
   "xmlstarlet"
@@ -27,4 +29,5 @@ cinst() (
    choco install -y "$@"
    )
 
+# cinst git.install --params "/GitAndUnixToolsOnPath /WindowsTerminal /NoCredentialManager /NoAutoCrlf"
 cinst "${pkgs[@]}"
