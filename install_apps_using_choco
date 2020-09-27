@@ -7,9 +7,9 @@ die() { printf %s "${@+$@$'\n'}" 1>&2 ; exit 1 ; }
 #  `choco upgrade -y all` upgrade all installed package
 
 pkgs=(
-# "ffmpeg"  # removed since choco version is incompatible with my bash scripts for unknown reasons
   "calibre"
-  'git.install --params "/GitAndUnixToolsOnPath /WindowsTerminal /NoCredentialManager /NoAutoCrlf"'
+# "ffmpeg"  # removed since choco version is incompatible with my bash scripts for unknown reasons
+  'html-tidy'
   "irfanview" "irfanviewplugins"
   "make"  # GNU make
   "mpc-hc-clsid2"
@@ -22,12 +22,11 @@ pkgs=(
   "zulu11"
   )
 
-command -v choco > /dev/null || die "need to install choco; use install_chocolatey.bat"
+command -v choco > /dev/null || die "need to install choco+git; see https://github.com/fwmechanic/homedir/blob/master/.bash_aliases"
 
 cinst() (
    set -x
    choco install -y "$@"
    )
 
-# cinst git.install --params "/GitAndUnixToolsOnPath /WindowsTerminal /NoCredentialManager /NoAutoCrlf"
 cinst "${pkgs[@]}"
