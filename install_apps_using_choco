@@ -30,3 +30,4 @@ cinst() (
    )
 
 cinst "${pkgs[@]}"
+cinst sumatrapdf.install --params "/NoDesktop"
