@@ -12,12 +12,15 @@ pkgs=(
   'html-tidy'
   "irfanview" "irfanviewplugins"
   "make"  # GNU make
+  "mediainfo-cli"
   "mpc-hc-clsid2"
+  "puretext"
   "ripgrep"
   "shellcheck"
   "totalcommander"
   "universal-ctags"
   "wget"
+  "x-mouse-button-control"
   "xmlstarlet"
   "zulu11"
   )
