@@ -15,6 +15,7 @@ pkgs=(
   "mediainfo-cli"
   "mpc-hc-clsid2"
   "puretext"
+  "qpdf"
   "ripgrep"
   "shellcheck"
   "totalcommander"
