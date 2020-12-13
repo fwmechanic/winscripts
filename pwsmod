@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+die() { printf %s "${@+$@$'\n'}" 1>&2 ; exit 1 ; }
+see() ( { set -x; } 2>/dev/null ; "$@" ) ;
+
+# NB: PWS is installed manually https://pwsafe.org/
+
+pwsexe="$PROGRAMFILES\Password Safe\pwsafe.exe"  # dflt x64 install locn
+[[ -x "$pwsexe" ]] || die "$pwsexe not found"
+[[ "$PWSAFE_FNM" ]] || die '$PWSAFE_FNM (MUST BE RELATIVE TO $HOME) is not defined?'
+safe_fnm="$HOME/$PWSAFE_FNM"           # ; echo "safe_fnm=$safe_fnm"
+[[ -f "$safe_fnm" ]] || die "$safe_fnm is not a file?"
+safe_fnmw="$(cygpath -aw "$safe_fnm")" # ; echo "safe_fnmw=$safe_fnmw"
+start '""' "$pwsexe" "$safe_fnmw"
