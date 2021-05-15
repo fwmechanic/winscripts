@@ -8,6 +8,37 @@ require "strict"  -- can be found in same dir as this file: %~dp0strict.lua
 
 local hardcodedArg = { 'm:/ebooks' }  -- undefine or empty to allow passing cmdline args (in arg variable)
 
+local isCygWin = os.getenv('SHELL') and os.getenv('SHELL'):match( '%.exe$' ) or false
+local fnmdisp
+do
+   if isCygWin then
+      fnmdisp = function( fnm )
+         fnm = fnm:gsub('\\','/')
+         fnm = fnm:gsub('^(%a):/', '/%1/')
+         if fnm:match'[$%s"&!|{}()]' and not fnm:match"'" then
+            fnm = "'"..fnm.."'"
+         else
+            if fnm:match"'" then
+               fnm = '"'..fnm..'"'
+               end
+            end
+         return fnm
+         end
+   else
+      fnmdisp = function( fnm )
+         fnm = fnm:gsub('/','\\')
+         if fnm:match"[%s'&!|()]" then
+            fnm = '"'..fnm..'"'
+            end
+         return fnm
+         end
+      end
+end
+
+local function ms_esc(fnm)
+   return fnmdisp(fnm)
+   end
+
 local function splitfpath(fullnm)  -- io.write("fnm=",fullnm,"\n")
    local dn,fn = fullnm:match"(.+[\\/])([^\\/]+)$"
    if not fn then return nil,fullnm end
@@ -36,13 +67,6 @@ local function pairsByKeys( tbl1, sortfxn )  -- a pairsByKeys using pairsByKeyFx
       -- if key1 then print( "+++  ", key1 ) end
       return key1, tbl1[ key1 ]
       end
-   end
-
-local function ms_esc(fnm)
-   if fnm:match"[%s'&!|()]" then
-      fnm = '"'..fnm..'"'
-      end
-   return (fnm:gsub("/","\\"))
    end
 
 local t_mons = table.invert{"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"}
@@ -173,6 +197,9 @@ local function processFilenames( fnm )
                      end
                else
                   io.write( "move blocked" )
+                  if xt == 'epub' then
+                     io.write( '\n' , 'diff_epub ', ms_esc(nfn), ' ', ms_esc(fn) )
+                     end
                   mb = 1
                   end
                end
