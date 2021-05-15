@@ -112,7 +112,7 @@ local filters = {
    function(fn) return fn..fs_ext   end,  -- #########  MUST BE LAST   !!!
    }
 
-local destroy = true
+local destroy = true  -- true for production, false for no-op verification
 local rename_file,remove_file
 do
    local function sms_esc(fn)
@@ -131,9 +131,20 @@ do
       end
 end
 
+local mtpdf = 'medtype.pdf'
+local function humanExtOf( fnm )
+   if fnm:match('%.medtype.pdf$') then return mtpdf end
+   return fnm:match('%.([^.]+)$')
+   end
+
+-- io.write( humanExtOf( 'm:\\ebooks\\travel\\non-NorthAmerica\\Lonely.Planet.Peru.8e.2013.medtype.pdf' ), '\n' )
+-- io.write( humanExtOf( 'm:\\ebooks\\travel\\non-NorthAmerica\\Lonely.Planet.Peru.8e.2013.mextype.pdf' ), '\n' )
+-- os.exit(1)
+
 local function processFilenames( fnm )
    local dn,fn = splitfpath( fnm )     -- ; io.write( "d=",dn,",f=",fn,"\n" )
    local nfn = fn
+   local mb,xt = 0,false
    for _,filter in ipairs(filters) do  -- ; io.write( "nfn=",nfn,"\n" )
       nfn = filter( nfn )
       end
@@ -142,7 +153,7 @@ local function processFilenames( fnm )
       nfn = dn .. nfn                  -- ; io.write( "pnow=",fn,"\npnew=",nfn,"\n" )
       local fs  = io.stat( fn )
       local nfs = io.stat( nfn )
-      if nfs then
+      if nfs then  -- something in the way?
          if fn:lower()==nfn:lower() then
             io.write( "recase ",ms_esc(fn)," ",ms_esc(nfn),"\n" )
             rename_file( fn, nfn )
@@ -152,7 +163,18 @@ local function processFilenames( fnm )
             if fs.size == nfs.size then
                remove_file(fn)
             else
-               io.write( "move blocked" )
+               xt = humanExtOf( nfn )
+               if xt == mtpdf then
+                  if fs.size > nfs.size then
+                     remove_file(fn)
+                  else
+                     remove_file(nfn)
+                     rename_file( fn, nfn )
+                     end
+               else
+                  io.write( "move blocked" )
+                  mb = 1
+                  end
                end
             end
          io.stdout:fmt( "\n" )
@@ -162,7 +184,7 @@ local function processFilenames( fnm )
          end
       end
 
-   return fnm
+   return mb, xt
    end
 
 local myArg = hardcodedArg and #hardcodedArg > 0 and hardcodedArg or arg
@@ -176,7 +198,7 @@ for dirnm in path:gmatch"[^;]+" do
    dirs[1+#dirs] = dnm
    end
 
-local numFiles = 0
+local numFiles, mvBlocked = 0, 0
 local t_fnms = {}
 for _,dnm in ipairs(dirs) do
    io.write("scanning ", dnm)
@@ -188,9 +210,18 @@ for _,dnm in ipairs(dirs) do
    io.write("\n")
    end
 
+local countByExt = {}
 for dnm,fnms in pairsByKeys(t_fnms) do
    for _,nm in ipairs(fnms) do
-      processFilenames( nm, dnm )
+      local mb, xt = processFilenames( nm, dnm )
+      mvBlocked = mvBlocked + mb
+      if xt then
+         countByExt[ xt ] = 1 + (countByExt[ xt ] or 0)
+         end
       end
    end
-io.write("examined ", numFiles," filenames")
+io.write("examined ", numFiles," filenames, ", mvBlocked, " moves blocked\n" )
+local xt, ct
+for xt, ct in pairsByKeys(countByExt) do
+   io.stdout:fmt( "%-12s %4d\n", xt, ct )
+   end
