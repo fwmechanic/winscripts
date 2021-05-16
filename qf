@@ -6,6 +6,7 @@
 
 require "strict"  -- can be found in same dir as this file: %~dp0strict.lua
 
+local q1,q2 = "'", '"'
 local hardcodedArg = { 'm:/ebooks' }  -- undefine or empty to allow passing cmdline args (in arg variable)
 
 local isCygWin = os.getenv('SHELL') and os.getenv('SHELL'):match( '%.exe$' ) or false
@@ -141,7 +142,7 @@ local rename_file,remove_file
 do
    local function sms_esc(fn)
       local mfn = ms_esc(fn)
-      if not mfn:match( '^"' ) then mfn = " " .. mfn end
+      if not mfn:match( '^['..q1..q2..']' ) then mfn = " " .. mfn end
       return mfn
       end
    local function rm_msg(fn)     io.write( "removing ",sms_esc(fn), "\n" ) end
@@ -183,7 +184,7 @@ local function processFilenames( fnm )
             rename_file( fn, nfn )
          else
             io.stdout:fmt( "%8d %s\n",nfs.size, ms_esc(nfn) )
-            io.stdout:fmt( "%8d %s\n",fs.size, ms_esc(fn) )
+            io.stdout:fmt( "%8d %s\n", fs.size, ms_esc( fn) )
             if fs.size == nfs.size then
                remove_file(fn)
             else
@@ -214,21 +215,24 @@ local function processFilenames( fnm )
    return mb, xt
    end
 
-local myArg = hardcodedArg and #hardcodedArg > 0 and hardcodedArg or arg
+local myArg = (#arg > 0 and arg) or (hardcodedArg and #hardcodedArg > 0 and hardcodedArg)
 assert( #myArg > 0, "missing rootpaths arg(s)" )
 local path = table.concat( myArg, ';' )
 io.write( "rootpaths=", path, "\n")
-local sl = assert(path:match "[\\/]")
+local sl = path:match("[\\/]") or '/'
 local dirs = {}
 for dirnm in path:gmatch"[^;]+" do
-   local dnm = (dirnm..sl):gsub("[\\/]([\\/])$", "$1" )
+   local dnm = dirnm:gsub("[\\/]$",'')..sl  -- force (non-dup'd) trailing dirsep presence
+   io.write( 'dnm ', dnm, '\n' )
    dirs[1+#dirs] = dnm
    end
+
+-- assert(false)
 
 local numFiles, mvBlocked = 0, 0
 local t_fnms = {}
 for _,dnm in ipairs(dirs) do
-   io.write("scanning ", dnm)
+   io.write("scanning ", dnm, ' ')
    local fnm_ = a_filenames( dnm, 1 )  -- filters out directories and files in .xxx directories
    t_fnms[dnm] = fnm_
    numFiles = numFiles + #fnm_
