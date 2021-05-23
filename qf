@@ -92,6 +92,14 @@ local filters = {
       return fn
       end,
 
+   function(fn) -- replace LEADING publication Yyyy-mm-dd with TRAILING Yyyy
+      local yr,mon,day,ix = fn:match"^(%d%d%d%d)%-(%d%d)%-(%d%d)[+._]?()"
+      if ix then
+         return fn:sub( ix )..'.'.. yr..'.'..mon
+         end
+      return fn
+      end,
+
    function(fn) -- replace (publication) Yyyy-mm with Yyyy in older fnms
       local yr,mon = fn:match"%.(%d%d%d%d)%-(%d%d)$"
       if yr then
