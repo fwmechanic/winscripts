@@ -70,13 +70,29 @@ local function pairsByKeys( tbl1, sortfxn )  -- a pairsByKeys using pairsByKeyFx
       end
    end
 
-local t_mons = table.invert{"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"}
+
 local last_year = (os.date"*t").year-1
+local function monok(mon) return mon >= 1 and mon <= 12 end
+local function ynok(yn) return yn > 1912 and yn < last_year end
+local t_monlongs = table.invert{"January","February","March","April","May","June","July","August","September","October","November","December"}
+local t_mons = table.invert{"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"}
 
 local fs_ext     local function sv_ext  (st) fs_ext   = st  return "" end
 local fs_cropd   local function sv_cropd(st) fs_cropd = st  return "" end
 
+local function monconv(pat,tbl)
+   return function(fn)
+      local mon,yr = fn:match(pat)
+      if yr and tonumber(mon) and ynok( yr ) and tbl[mon] then
+         return fn:gsub(pat,"."..fmt("%s.%02d",yr,tbl[mon]))
+         end
+      return fn
+      end
+   end
+
 local filters = {
+
+   function(fn) return fn:gsub( "^Letmeread%.net_"  , "" ) end,
 
    --------------- preprocessing
    function(fn)  fs_ext=""  fs_cropd=""  return fn         end,
@@ -84,13 +100,8 @@ local filters = {
    function(fn)  return fn:gsub( "_cropped$" , sv_cropd )  end,
 
    --------------- actual filters
-   function(fn) -- replace (publication) Mnm-Yyyy with Yyyy-mm
-      local mon,yr = fn:match"%.(%a%a%a)%.(%d%d%d%d)$"
-      if yr and t_mons[mon] then
-         return fn:gsub("%.(%a%a%a)%.(%d%d%d%d)$","."..fmt("%s-%02d",yr,t_mons[mon]))
-         end
-      return fn
-      end,
+   monconv("%.(%a+)%.(%d%d%d%d)$"   , t_monlongs ),  -- replace (publication) Monthname-Yyyy with Yyyy-mm
+   monconv("%.(%a%a%a)%.(%d%d%d%d)$", t_mons     ),  -- replace (publication) Mnm-Yyyy with Yyyy-mm
 
    function(fn) -- replace LEADING publication Yyyy-mm-dd with TRAILING Yyyy
       local yr,mon,day,ix = fn:match"^(%d%d%d%d)%-(%d%d)%-(%d%d)[+._]?()"
@@ -106,7 +117,7 @@ local filters = {
          local yn = tonumber(yr)
          mon   = tonumber(mon)
          -- io.write( yr, " ? ", last_year,"\n" )
-         if mon <= 12 and yn > 1912 and yn < last_year then
+         if monok( mon ) and ynok( yn ) then
             return fn:gsub("%.(%d%d%d%d)%-%d%d$",".%1")
             end
          end
@@ -116,6 +127,8 @@ local filters = {
    function(fn) return fn:gsub( "%((%d%d%d%d)%)$",".%1" ) end,  -- alt yr-of-publ fn format
 
    function(fn) return fn:gsub( "–"   , "-" ) end,
+   function(fn) if fn:match '[^_]_[^_]' then fn = fn:gsub( "__+", "-" ) end
+                return fn end,                                     -- go
    function(fn) return fn:gsub( "[%s.,_!]+", "." ) end,                                     -- go
    function(fn) return fn:gsub( "%.%-", "-" ) end,
    function(fn) return fn:gsub( "%-%.", "-" ) end,
