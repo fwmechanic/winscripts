@@ -71,9 +71,9 @@ local function pairsByKeys( tbl1, sortfxn )  -- a pairsByKeys using pairsByKeyFx
    end
 
 
-local last_year = (os.date"*t").year-1
+local last_year = (os.date"*t").year+1   -- io.write( 'last_year', ' ', last_year, '\n' )
 local function monok(mon) return mon >= 1 and mon <= 12 end
-local function ynok(yn) return yn > 1912 and yn < last_year end
+local function ynok(yn) yn = tonumber(yn) return yn > 1912 and yn < last_year end
 local t_monlongs = table.invert{"January","February","March","April","May","June","July","August","September","October","November","December"}
 local t_mons = table.invert{"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"}
 
@@ -82,8 +82,11 @@ local fs_cropd   local function sv_cropd(st) fs_cropd = st  return "" end
 
 local function monconv(pat,tbl)
    return function(fn)
+                                      -- io.write( 'mc+', ' ', fn, ' ', pat, '\n' )
       local mon,yr = fn:match(pat)
-      if yr and tonumber(mon) and ynok( yr ) and tbl[mon] then
+      if yr then                      -- io.write( 'mc!', ' ', yr, ' ', mon, '\n' )
+            end
+      if yr and ynok( yr ) and tbl[mon] then  -- io.write( 'mc#', ' ', yr, ' ', mon, '\n' )
          return fn:gsub(pat,"."..fmt("%s.%02d",yr,tbl[mon]))
          end
       return fn
@@ -99,19 +102,22 @@ local filters = {
    function(fn)  return fn:gsub( "%.[^.]+$"  , sv_ext   )  end,
    function(fn)  return fn:gsub( "_cropped$" , sv_cropd )  end,
 
+   function(fn)  return fn:match( '[^_]_[^_]' ) and fn:gsub( "__+", "-" ) or fn end,
+   function(fn)  return fn:gsub( "[%s.,_!]+", "." ) end,
+
    --------------- actual filters
-   monconv("%.(%a+)%.(%d%d%d%d)$"   , t_monlongs ),  -- replace (publication) Monthname-Yyyy with Yyyy-mm
-   monconv("%.(%a%a%a)%.(%d%d%d%d)$", t_mons     ),  -- replace (publication) Mnm-Yyyy with Yyyy-mm
+   monconv("[-.](%a+)%.(%d%d%d%d)$"   , t_monlongs ),  -- replace (publication) Monthname-Yyyy with Yyyy-mm
+   monconv("[-.](%a%a%a)%.(%d%d%d%d)$", t_mons     ),  -- replace (publication) Mnm-Yyyy with Yyyy-mm
 
    function(fn) -- replace LEADING publication Yyyy-mm-dd with TRAILING Yyyy
       local yr,mon,day,ix = fn:match"^(%d%d%d%d)%-(%d%d)%-(%d%d)[+._]?()"
       if ix then
-         return fn:sub( ix )..'.'.. yr..'.'..mon
+         return fn:sub( ix ) .. ('.'.. yr..'.'..mon) .. (day == '01' and '' or ('.'..day))
          end
       return fn
       end,
 
-   function(fn) -- replace (publication) Yyyy-mm with Yyyy in older fnms
+   --[[ function(fn) -- replace (publication) Yyyy-mm with Yyyy in older fnms
       local yr,mon = fn:match"%.(%d%d%d%d)%-(%d%d)$"
       if yr then
          local yn = tonumber(yr)
@@ -122,14 +128,11 @@ local filters = {
             end
          end
       return fn
-      end,
+      end, ]]
 
    function(fn) return fn:gsub( "%((%d%d%d%d)%)$",".%1" ) end,  -- alt yr-of-publ fn format
 
    function(fn) return fn:gsub( "–"   , "-" ) end,
-   function(fn) if fn:match '[^_]_[^_]' then fn = fn:gsub( "__+", "-" ) end
-                return fn end,                                     -- go
-   function(fn) return fn:gsub( "[%s.,_!]+", "." ) end,                                     -- go
    function(fn) return fn:gsub( "%.%-", "-" ) end,
    function(fn) return fn:gsub( "%-%.", "-" ) end,
 
@@ -143,9 +146,9 @@ local filters = {
    function(fn) return fn:gsub( "U%.S%.", "US." ) end,                                      -- go
    function(fn) return fn:gsub( "%.#(%d+)", ".v%1" ) end,
    function(fn) return fn:gsub( "%.#%.", ".@." ) end,
-   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.[I1]%.", "WW1." ) end,
-   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.2%." , "WW2." ) end,
-   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.II%.", "WW2." ) end,
+   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.[I1]%([-.])", "WW1%1" ) end,
+   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.2%([-.])" , "WW2%1" ) end,
+   function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.II([-.])", "WW2%1" ) end,
    function(fn) return fn:gsub( "%.[Ww][Ww]II", ".WW2" ) end,
 
    function(fn) return fn:gsub( "%.[Ss]econd%.[Ee]dition([-%.])"  , ".2e%1" ) end,
@@ -159,7 +162,7 @@ local filters = {
    }
 
 local destroy = true  -- true for production, false for no-op verification
-local rename_file,remove_file
+local rename_file,remove_file,mvUndoLog_fnm,mvUndoLog,mvCount
 do
    local function sms_esc(fn)
       local mfn = ms_esc(fn)
@@ -169,7 +172,16 @@ do
    local function rm_msg(fn)     io.write( "removing ",sms_esc(fn), "\n" ) end
    local function mv_msg(fn,nfn) io.write( "move.now ",sms_esc(fn), "\nmove.new ",sms_esc(nfn),"\n" ) end
    if destroy then
-      rename_file = function( fn,nfn ) mv_msg(fn,nfn) assert( os.rename( fn,nfn ) ) end
+      mvUndoLog_fnm = assert( os.getenv( "APPDATA" ), "$APPDATA not defined?" ) .. '/qf_mv.log'
+      mvUndoLog = assert( io.open( mvUndoLog_fnm, 'a+' ) )
+      mvUndoLog:write( '\n' )
+      -- io.write( 'mvUndoLog_fnm ', mvUndoLog_fnm, '\n' )
+      mvCount = 0
+      rename_file = function( fn,nfn ) mv_msg(fn,nfn) assert( os.rename( fn,nfn ) )
+                       mvUndoLog:write( 'mv -n ', nfn, ' ', fn, '\n' )
+                       mvUndoLog:flush()
+                       mvCount = 1+mvCount
+                       end
       remove_file = function( fn )     rm_msg(fn)     assert( os.remove(fn)       ) end
    else
       rename_file = mv_msg
@@ -272,7 +284,15 @@ for dnm,fnms in pairsByKeys(t_fnms) do
          end
       end
    end
+
 io.write("examined ", numFiles," filenames, ", mvBlocked, " moves blocked\n" )
+if mvUndoLog_fnm and mvUndoLog then
+   mvUndoLog:close()
+   if mvCount and mvCount > 0 then
+      io.write( mvCount, ' files moved, undo instructions in ', mvUndoLog_fnm, '\n' )
+      end
+   end
+
 local xt, ct
 for xt, ct in pairsByKeys(countByExt) do
    io.stdout:fmt( "%-12s %4d\n", xt, ct )
