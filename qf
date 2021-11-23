@@ -70,6 +70,10 @@ local function pairsByKeys( tbl1, sortfxn )  -- a pairsByKeys using pairsByKeyFx
       end
    end
 
+local function count(base, pattern)  -- https://stackoverflow.com/a/51256340
+   return select(2, string.gsub(base, pattern, ""))
+   end
+
 
 local last_year = (os.date"*t").year+1   -- io.write( 'last_year', ' ', last_year, '\n' )
 local function monok(mon) return mon >= 1 and mon <= 12 end
@@ -101,6 +105,12 @@ local filters = {
    function(fn)  fs_ext=""  fs_cropd=""  return fn         end,
    function(fn)  return fn:gsub( "%.[^.]+$"  , sv_ext   )  end,
    function(fn)  return fn:gsub( "_cropped$" , sv_cropd )  end,
+
+   function(fn)  if count(fn, "[%.%_]")==0 and count(fn, "%-")>1 then
+                    return fn:gsub("%-",'.')  -- some magazines names are 100% '-' separated
+                    end
+                 return fn
+                 end,
 
    function(fn)  return fn:match( '[^_]_[^_]' ) and fn:gsub( "__+", "-" ) or fn end,
    function(fn)  return fn:gsub( "[%s.,_!]+", "." ) end,
