@@ -75,9 +75,9 @@ local function count(base, pattern)  -- https://stackoverflow.com/a/51256340
    end
 
 
-local last_year = (os.date"*t").year+1   -- io.write( 'last_year', ' ', last_year, '\n' )
+local last_year = (os.date"*t").year+1  -- io.write( 'last_year', ' ', last_year, '\n' )
 local function monok(mon) return mon >= 1 and mon <= 12 end
-local function ynok(yn) yn = tonumber(yn) return yn > 1912 and yn < last_year end
+local function ynok(yn) yn = tonumber(yn) return yn > 1912 and yn <= last_year end
 local t_monlongs = table.invert{"January","February","March","April","May","June","July","August","September","October","November","December"}
 local t_mons = table.invert{"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"}
 
@@ -85,13 +85,17 @@ local fs_ext     local function sv_ext  (st) fs_ext   = st  return "" end
 local fs_cropd   local function sv_cropd(st) fs_cropd = st  return "" end
 
 local function monconv(pat,tbl)
-   return function(fn)
-                                      -- io.write( 'mc+', ' ', fn, ' ', pat, '\n' )
-      local mon,yr = fn:match(pat)
-      if yr then                      -- io.write( 'mc!', ' ', yr, ' ', mon, '\n' )
-            end
-      if yr and ynok( yr ) and tbl[mon] then  -- io.write( 'mc#', ' ', yr, ' ', mon, '\n' )
-         return fn:gsub(pat,"."..fmt("%s.%02d",yr,tbl[mon]))
+   local pat1 = "[-.]"..pat.."%.".."(%d%d%d%d)$"
+   local pat2 = "[-.]"..pat.."%."..pat.."%.".."(%d%d%d%d)$"
+                                                 io.write( 'mc+', ' ', pat1, ' ', pat2, '\n' )
+   return function(fn)                        -- io.write( 'mc+', ' ', fn, ' ', pat, '\n' )
+      local m1,m2,yr = fn:match(pat2)
+      if yr and ynok( yr ) and tbl[m1] and tbl[m2] then
+         return fn:gsub(pat2,"."..fmt("%s.%02d",yr,tbl[m1]))
+         end
+      m1,yr = fn:match(pat1)
+      if yr and ynok( yr ) and tbl[m1] then  -- io.write( 'mc#', ' ', yr, ' ', m1, '\n' )
+         return fn:gsub(pat1,"."..fmt("%s.%02d",yr,tbl[m1]))
          end
       return fn
       end
@@ -99,28 +103,33 @@ local function monconv(pat,tbl)
 
 local filters = {
 
-   function(fn) return fn:gsub( "^Letmeread%.net_"  , "" ) end,
-
    --------------- preprocessing
    function(fn)  fs_ext=""  fs_cropd=""  return fn         end,
+   -- convert exo-ASCII chars to punct
+   function(fn)  return fn:gsub( "–"         , "-" )       end,
+   function(fn)  return fn:gsub( ' '         , '.' )       end,
+
+   function(fn) return fn:gsub( "^Letmeread%.net_"       , "" ) end,
+   function(fn) return fn:gsub( '[%s%.]%(z%-lib%.org%)'  , "" ) end,
+   function(fn) return fn:gsub( '%.mobilism%.org'        , "" ) end,
+
    function(fn)  return fn:gsub( "%.[^.]+$"  , sv_ext   )  end,
    function(fn)  return fn:gsub( "_cropped$" , sv_cropd )  end,
 
-   function(fn)  if count(fn, "[%.%_]")==0 and count(fn, "%-")>1 then
-                    return fn:gsub("%-",'.')  -- some magazines names are 100% '-' separated
-                    end
-                 return fn
-                 end,
+   function(fn)  return count(fn, "[%.%_%s]")==0 and count(fn, "%-")>1 and fn:gsub("%-",'.') or fn  end,  -- some (e.g. magazine) file names are 100% '-' separated
+   function(fn)  return count(fn, "[%-%.%_%s]")==0 and count(fn, "%u%l")>1 and fn:gsub("(%u%l+)",'%1.') or fn  end,  -- some (e.g. magazine) file names are 100% CamelCase-only
 
    function(fn)  return fn:match( '[^_]_[^_]' ) and fn:gsub( "__+", "-" ) or fn end,
    function(fn)  return fn:gsub( "[%s.,_!]+", "." ) end,
 
-   --------------- actual filters
-   monconv("[-.](%a+)%.(%d%d%d%d)$"   , t_monlongs ),  -- replace (publication) Monthname-Yyyy with Yyyy-mm
-   monconv("[-.](%a%a%a)%.(%d%d%d%d)$", t_mons     ),  -- replace (publication) Mnm-Yyyy with Yyyy-mm
+   function(fn)  return fn:gsub( "%.?%-%.?", "-" ) end,
 
-   function(fn) -- replace LEADING publication Yyyy-mm-dd with TRAILING Yyyy
-      local yr,mon,day,ix = fn:match"^(%d%d%d%d)%-(%d%d)%-(%d%d)[+._]?()"
+   --------------- actual filters
+   monconv("(%a+)"   , t_monlongs ),  -- replace (publication) Monthname-Yyyy with Yyyy-mm
+   monconv("(%a%a%a)", t_mons     ),  -- replace (publication) Mnm-Yyyy with Yyyy-mm
+
+   function(fn) -- replace LEADING publication Yyyy-mm-dd (or Yyyy.mm.dd) with TRAILING Yyyy.mm[.dd]
+      local yr,_,mon,day,ix = fn:match"^(%d%d%d%d)([%-%.])(%d%d)%2(%d%d)[%-%+%._]?()%u"
       if ix then
          return fn:sub( ix ) .. ('.'.. yr..'.'..mon) .. (day == '01' and '' or ('.'..day))
          end
@@ -142,10 +151,6 @@ local filters = {
 
    function(fn) return fn:gsub( "%((%d%d%d%d)%)$",".%1" ) end,  -- alt yr-of-publ fn format
 
-   function(fn) return fn:gsub( "–"   , "-" ) end,
-   function(fn) return fn:gsub( "%.%-", "-" ) end,
-   function(fn) return fn:gsub( "%-%.", "-" ) end,
-
    function(fn) return fn:gsub( "['’“”]"   , "" ) end,
    function(fn) return fn:gsub( "[%._-]+$" , "" ) end,
 
@@ -161,10 +166,10 @@ local filters = {
    function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.II([-.])", "WW2%1" ) end,
    function(fn) return fn:gsub( "%.[Ww][Ww]II", ".WW2" ) end,
 
-   function(fn) return fn:gsub( "%.[Ss]econd%.[Ee]dition([-%.])"  , ".2e%1" ) end,
-   function(fn) return fn:gsub( "%.(%d+)[nr]d%.[Ee]dition([-%.])"  , ".%1e%2" ) end,
-   function(fn) return fn:gsub( "%.(%d+)th%.[Ee]dition([-%.])"  , ".%1e%2" ) end,
-   function(fn) return fn:gsub( "%.&%.", ".n." ) end,                                       -- go
+   function(fn) return fn:gsub( "[-.][Ss]econd%.[Ee]dition([-%.])"  , ".2e%1" ) end,
+   function(fn) return fn:gsub( "[-.](%d+)[nr]d%.[Ee]dition([-%.])"  , ".%1e%2" ) end,
+   function(fn) return fn:gsub( "[-.](%d+)th%.[Ee]dition([-%.])"  , ".%1e%2" ) end,
+   function(fn) return fn:gsub( "[-.]&%.", ".n." ) end,                                       -- go
 
    --------------- un-preprocessing
    function(fn) return fn..fs_cropd end,  -- #########  MUST BE LAST-1 !!!
@@ -188,7 +193,7 @@ do
       -- io.write( 'mvUndoLog_fnm ', mvUndoLog_fnm, '\n' )
       mvCount = 0
       rename_file = function( fn,nfn ) mv_msg(fn,nfn) assert( os.rename( fn,nfn ) )
-                       mvUndoLog:write( 'mv -n ', nfn, ' ', fn, '\n' )
+                       mvUndoLog:write( 'mv -n ', sms_esc(nfn), ' ', sms_esc(fn), '\n' )
                        mvUndoLog:flush()
                        mvCount = 1+mvCount
                        end
@@ -212,11 +217,12 @@ local function humanExtOf( fnm )
 local function processFilenames( fnm )
    local dn,fn = splitfpath( fnm )     -- ; io.write( "d=",dn,",f=",fn,"\n" )
    local nfn = fn
-   local mb,xt = 0,false
-   for _,filter in ipairs(filters) do  -- ; io.write( "nfn=",nfn,"\n" )
-      nfn = filter( nfn )
+   local mb,xt = 0,false               -- ; io.write( "\n","nfn=",nfn,"\n" )
+   for _,filter in ipairs(filters) do
+      local _fn = filter( nfn )        -- if _fn ~= nfn then io.write( "nfn=",nfn,"\n" ) end
+      nfn = _fn
       end
-   if nfn ~= fn then                   -- ; io.write( "now=",fn,"\nnew=",nfn,"\n" )
+   if nfn ~= fn then                   --   io.write( "now=",fn,"\nnew=",nfn,"\n" )
       fn  = dn .. fn
       nfn = dn .. nfn                  -- ; io.write( "pnow=",fn,"\npnew=",nfn,"\n" )
       local fs  = io.stat( fn )
@@ -258,6 +264,7 @@ local function processFilenames( fnm )
    return mb, xt
    end
 
+local recurse = not (#arg > 0 and arg)
 local myArg = (#arg > 0 and arg) or (hardcodedArg and #hardcodedArg > 0 and hardcodedArg)
 assert( #myArg > 0, "missing rootpaths arg(s)" )
 local path = table.concat( myArg, ';' )
@@ -276,7 +283,7 @@ local numFiles, mvBlocked = 0, 0
 local t_fnms = {}
 for _,dnm in ipairs(dirs) do
    io.write("scanning ", dnm, ' ')
-   local fnm_ = a_filenames( dnm, 1 )  -- filters out directories and files in .xxx directories
+   local fnm_ = a_filenames( dnm, recurse )  -- filters out directories and files in .xxx directories
    t_fnms[dnm] = fnm_
    numFiles = numFiles + #fnm_
    if 0==#fnm_ then io.write("*** ERROR ***") end
