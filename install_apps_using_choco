@@ -5,24 +5,31 @@ die() { printf %s "${@+$@$'\n'}" 1>&2 ; exit 1 ; }
 # other choco commands
 #  `choco uninstall -x pkgnm` remove package and all dependencies
 #  `choco upgrade -y all` upgrade all installed package
+#  `choco list -li`  list locally installed programs (both managed by choco and NOT!)
 
 pkgs=(
   "calibre"
-# "ffmpeg"  # removed since choco version is incompatible with my bash scripts for unknown reasons
+  "ffmpeg"  # removed since choco version is incompatible with my bash scripts for unknown reasons
+# "dosbox"       # succeeds but not in PATH?
+# "ghostscript"  # succeeds but not in PATH?
+  "calibre"
   'html-tidy'
   "irfanview" "irfanviewplugins"
   "make"  # GNU make
+  "miktex"  # for tex::beamer (my command: pdflatex)
   "mediainfo-cli"
   "mpc-hc-clsid2"
   "puretext"
   "qpdf"
   "ripgrep"
   "shellcheck"
+  "strawberryperl"   # for "resume-sprint" repo (to get functioning .PL file association) _only_
   "totalcommander"
   "universal-ctags"
   "wget"
   "x-mouse-button-control"
   "xmlstarlet"
+  "yt-dlp"
   "zulu11"
   )
 

@@ -87,7 +87,7 @@ local fs_cropd   local function sv_cropd(st) fs_cropd = st  return "" end
 local function monconv(pat,tbl)
    local pat1 = "[-.]"..pat.."%.".."(%d%d%d%d)$"
    local pat2 = "[-.]"..pat.."%."..pat.."%.".."(%d%d%d%d)$"
-                                                 io.write( 'mc+', ' ', pat1, ' ', pat2, '\n' )
+                                              -- io.write( 'mc+', ' ', pat1, ' ', pat2, '\n' )
    return function(fn)                        -- io.write( 'mc+', ' ', fn, ' ', pat, '\n' )
       local m1,m2,yr = fn:match(pat2)
       if yr and ynok( yr ) and tbl[m1] and tbl[m2] then
@@ -99,6 +99,11 @@ local function monconv(pat,tbl)
          end
       return fn
       end
+   end
+
+local function show(fxn)  -- debug filters by wrapping with this
+   return function(fn)
+      io.write( '+', fn, '\n' ) fn = fxn(fn) io.write( '-', fn, '\n' ) return fn end
    end
 
 local filters = {
@@ -115,9 +120,10 @@ local filters = {
 
    function(fn)  return fn:gsub( "%.[^.]+$"  , sv_ext   )  end,
    function(fn)  return fn:gsub( "_cropped$" , sv_cropd )  end,
+   function(fn)  return fn:gsub( "^[-.]+" , '' )  end,
 
    function(fn)  return count(fn, "[%.%_%s]")==0 and count(fn, "%-")>1 and fn:gsub("%-",'.') or fn  end,  -- some (e.g. magazine) file names are 100% '-' separated
-   function(fn)  return count(fn, "[%-%.%_%s]")==0 and count(fn, "%u%l")>1 and fn:gsub("(%u%l+)",'%1.') or fn  end,  -- some (e.g. magazine) file names are 100% CamelCase-only
+   function(fn)  return count(fn, "[%-%.%_%s]")==0 and count(fn, "%u%l")>1 and fn:gsub("(%u%l+)",'%1.'):gsub("(%d+)",'%1.'):gsub('%.$','') or fn  end,  -- some (e.g. magazine) file names are 100% CamelCase-only
 
    function(fn)  return fn:match( '[^_]_[^_]' ) and fn:gsub( "__+", "-" ) or fn end,
    function(fn)  return fn:gsub( "[%s.,_!]+", "." ) end,
@@ -151,7 +157,7 @@ local filters = {
 
    function(fn) return fn:gsub( "%((%d%d%d%d)%)$",".%1" ) end,  -- alt yr-of-publ fn format
 
-   function(fn) return fn:gsub( "['’“”]"   , "" ) end,
+   function(fn) return fn:gsub( "['‘’“”]"  , "" ) end,
    function(fn) return fn:gsub( "[%._-]+$" , "" ) end,
 
    function(fn) return fn:gsub( "([CcFf])#%.", "%1sharp." ) end,
@@ -166,10 +172,13 @@ local filters = {
    function(fn) return fn:gsub( "[Ww]orld%.[Ww]ar%.II([-.])", "WW2%1" ) end,
    function(fn) return fn:gsub( "%.[Ww][Ww]II", ".WW2" ) end,
 
+   function(fn) return fn:gsub( "[-.]1st%.[Ee]dition([-%.])"  , ".1e%1" ) end,
+   function(fn) return fn:gsub( "[-.][Ff]irst%.[Ee]dition([-%.])"  , ".1e%1" ) end,
    function(fn) return fn:gsub( "[-.][Ss]econd%.[Ee]dition([-%.])"  , ".2e%1" ) end,
    function(fn) return fn:gsub( "[-.](%d+)[nr]d%.[Ee]dition([-%.])"  , ".%1e%2" ) end,
    function(fn) return fn:gsub( "[-.](%d+)th%.[Ee]dition([-%.])"  , ".%1e%2" ) end,
    function(fn) return fn:gsub( "[-.]&%.", ".n." ) end,                                       -- go
+   function(fn) return fn:gsub( '%.downmagaz%.net'       , "" ) end,
 
    --------------- un-preprocessing
    function(fn) return fn..fs_cropd end,  -- #########  MUST BE LAST-1 !!!
@@ -192,10 +201,15 @@ do
       mvUndoLog:write( '\n' )
       -- io.write( 'mvUndoLog_fnm ', mvUndoLog_fnm, '\n' )
       mvCount = 0
-      rename_file = function( fn,nfn ) mv_msg(fn,nfn) assert( os.rename( fn,nfn ) )
-                       mvUndoLog:write( 'mv -n ', sms_esc(nfn), ' ', sms_esc(fn), '\n' )
-                       mvUndoLog:flush()
-                       mvCount = 1+mvCount
+      rename_file = function( fn,nfn ) mv_msg(fn,nfn)
+                       local r,e = os.rename( fn,nfn )
+                       if r then
+                          mvUndoLog:write( 'mv -n ', sms_esc(nfn), ' ', sms_esc(fn), '\n' )
+                          mvUndoLog:flush()
+                          mvCount = 1+mvCount
+                       else
+                          io.stderr:write( e, '\n' )
+                          end
                        end
       remove_file = function( fn )     rm_msg(fn)     assert( os.remove(fn)       ) end
    else
@@ -218,8 +232,12 @@ local function processFilenames( fnm )
    local dn,fn = splitfpath( fnm )     -- ; io.write( "d=",dn,",f=",fn,"\n" )
    local nfn = fn
    local mb,xt = 0,false               -- ; io.write( "\n","nfn=",nfn,"\n" )
-   for _,filter in ipairs(filters) do
-      local _fn = filter( nfn )        -- if _fn ~= nfn then io.write( "nfn=",nfn,"\n" ) end
+   for ix,filter in ipairs(filters) do
+      local _fn = filter( nfn )
+      if false and _fn ~= nfn then
+         io.write( "old[",ix,"]=",nfn,"\n" )
+         io.write( "new[",ix,"]=",_fn,"\n" )
+         end
       nfn = _fn
       end
    if nfn ~= fn then                   --   io.write( "now=",fn,"\nnew=",nfn,"\n" )
@@ -281,23 +299,36 @@ for dirnm in path:gmatch"[^;]+" do
 
 local numFiles, mvBlocked = 0, 0
 local t_fnms = {}
+local function skippedDnm( dnm )
+   local qfnoNm = '.qfno'
+   local skipped =    _dir.name_isfile( dnm..qfnoNm )
+                   or _dir.name_isdir ( dnm..qfnoNm )
+   if skipped then
+      io.write( dnm, qfnoNm, ' found, skipping\n' )
+      end
+   return skipped
+   end
 for _,dnm in ipairs(dirs) do
-   io.write("scanning ", dnm, ' ')
-   local fnm_ = a_filenames( dnm, recurse )  -- filters out directories and files in .xxx directories
-   t_fnms[dnm] = fnm_
-   numFiles = numFiles + #fnm_
-   if 0==#fnm_ then io.write("*** ERROR ***") end
-                    io.write("discovered ", #fnm_," filenames")
-   io.write("\n")
+   if not skippedDnm( dnm ) then
+      io.write("scanning ", dnm, ' ')
+      local fnm_ = a_filenames( dnm, recurse )  -- filters out directories and files in .xxx directories
+      t_fnms[dnm] = fnm_
+      numFiles = numFiles + #fnm_
+      if 0==#fnm_ then io.write("*** ERROR ***") end
+                       io.write("discovered ", #fnm_," filenames")
+      io.write("\n")
+      end
    end
 
 local countByExt = {}
 for dnm,fnms in pairsByKeys(t_fnms) do
-   for _,nm in ipairs(fnms) do
-      local mb, xt = processFilenames( nm, dnm )
-      mvBlocked = mvBlocked + mb
-      if xt then
-         countByExt[ xt ] = 1 + (countByExt[ xt ] or 0)
+   if not skippedDnm( dnm ) then
+      for _,nm in ipairs(fnms) do
+         local mb, xt = processFilenames( nm, dnm )
+         mvBlocked = mvBlocked + mb
+         if xt then
+            countByExt[ xt ] = 1 + (countByExt[ xt ] or 0)
+            end
          end
       end
    end

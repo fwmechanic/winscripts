@@ -7,8 +7,9 @@ see() ( { set -x; } 2>/dev/null ; "$@" ) ;
 
 pwsexe="$PROGRAMFILES\Password Safe\pwsafe.exe"  # dflt x64 install locn
 [[ -x "$pwsexe" ]] || die "$pwsexe not found"
-[[ "$PWSAFE_FNM" ]] || die '$PWSAFE_FNM (MUST BE RELATIVE TO $HOME) is not defined?'
-safe_fnm="$HOME/$PWSAFE_FNM"           # ; echo "safe_fnm=$safe_fnm"
+set -x
+safe_fnm="${PWSAFE_FNM:-"$PWD/kgpass.lib"}"
+# [[ "$PWSAFE_FNM" ]] || die '$PWSAFE_FNM (abs path to safe file) is not defined?'
 [[ -f "$safe_fnm" ]] || die "$safe_fnm is not a file?"
 safe_fnmw="$(cygpath -aw "$safe_fnm")" # ; echo "safe_fnmw=$safe_fnmw"
-start '""' "$pwsexe" "$safe_fnmw"
+see start '""' "$pwsexe" "$safe_fnmw"
